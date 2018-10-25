@@ -35,7 +35,7 @@ def generate_pdf(src, dst, force=False):
     title = title[0:title.rfind(".")]
 
     command = [
-        "/usr/bin/pandoc",
+        "/usr/local/bin/pandoc",
         "--quiet",
 
         "--pdf-engine", "xelatex",
@@ -43,9 +43,10 @@ def generate_pdf(src, dst, force=False):
         "--toc",
 
         "--template=template.tex",
-        "-V", "geometry:margin=1.5in",
-        "-V", "documentclass=report",
+        "-V", "geometry:margin=0.5in",
+        "-V", "documentclass=article",
         # "-V" "geometry:papersize=a3paper",
+        "-V", "fontsize=10pt",
 
         "-V", "urlcolor=blue",
         "-V", "linkcolor=blue",
