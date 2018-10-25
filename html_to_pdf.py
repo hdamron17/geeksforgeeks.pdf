@@ -39,6 +39,7 @@ def generate_pdf(src, dst, force=False):
         "--quiet",
 
         "--pdf-engine", "xelatex",
+        "--self-contained",
 
         "--toc",
 
