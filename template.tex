@@ -157,6 +157,7 @@ $endif$
 
 $if(tables)$
   \usepackage{longtable,booktabs}
+  \renewcommand{\tabularnewline}{\\}  % Fixes error of misplaced noalign
 $endif$
 
 $if(graphics)$
@@ -247,7 +248,7 @@ $if(toc)$
     % Add an entry for Contents themselves.
     \addtocontents{toc}{\protect{\pdfbookmark[0]{\contentsname}{toc}}}
 
-    \tableofcontents
+    % \tableofcontents  % For some reason the toc prints twice
 }
 $endif$
 

@@ -8,19 +8,147 @@ Options:
 
     -t --tex         Convert to PDF instead of tex
     -f --force       Overwrite destination
+    -v --verbose     Make pandoc be verbose
 """
 
 import os
 
-from subprocess import call
+import subprocess
 
 from docopt import docopt
+import json
+from collections import OrderedDict
+import os.path
+import re
 
+from download_html import mkdir, ROOT as ROOT_TOPICS
+from download_total import subtract_header, HEADS
 
 ROOT_PDF = "PDF"
+ROOT_TEX = "TEX"
 
+pandoc_options = [
+    "/usr/bin/pandoc",
+    "--quiet",
 
-def generate_pdf(src, dst, force=False):
+    "--pdf-engine", "xelatex",
+
+    "--toc",
+
+    "-V", "geometry:margin=1.5in",
+    "-V", "documentclass=article",
+    # "-V" "geometry:papersize=a3paper",
+
+    "-V", "urlcolor=blue",
+    "-V", "linkcolor=blue",
+
+    # "-V", "title="+title,
+]
+
+def pandoc_base(src, dst=None, template="template.tex", from_file=True,
+        from_type="html", to_type="latex", verbose=False, print_cmd=False,
+        title="", media_dir="", other_args=[]):
+    command = pandoc_options.copy()
+    if verbose:
+        command[command.index("--quiet")] = "--verbose"
+    if template:
+        command.append("--template=%s" % template)
+
+    if title:
+        command += ["-V", "title=%s" % title]
+
+    if media_dir:
+        command.append("--extract-media=%s" % media_dir)
+
+    command += other_args
+
+    # Use src as the input content if not running from file
+    if from_file:
+        input_content = None
+        command += [src]
+    else:
+        input_content = src
+        command += ["-f", from_type]
+
+    # If dst is empty then return the content as a string
+    if dst:
+        stdout = None
+        command += ["-o", dst]
+    else:
+        stdout = subprocess.PIPE
+        command += ["-t", to_type]
+
+    if print_cmd:
+        print(" ".join(command))
+    ret = subprocess.run(command, input=input_content, stdout=stdout)
+    if not dst:
+        return ret.stdout
+
+def topic_filename(json_keys, root=ROOT_TOPICS):
+    return os.path.join(root, "/".join(json_keys[1:]))
+
+def json_keys(json_dict):
+    return _json_keys(json_dict)
+
+def _json_keys(json_dict, path=[]):
+    if not len(json_dict):
+        return []
+    paths = []
+    if path:
+        paths.append(tuple(path))
+    if isinstance(json_dict, OrderedDict):
+        for k, v in json_dict.items():
+            if isinstance(v, str):
+                paths.append(tuple(path + [v.split("/")[-2] + ".html", k]))
+            else:
+                paths += _json_keys(v, path + [k])
+    return paths
+
+def sublist(path1, path2):
+    return len(path1) < len(path2) and all(p1 == p2 for p1, p2 in zip(path1, path2))
+
+def generate_multifile_pdf(src, texfile, dst, force=False, verbose=False):
+    if not force and os.path.isfile(dst):
+        print("Destination already exists.")
+        return
+
+    if not force and os.path.isfile(texfile):
+        print("Temporary TeX file already exists, generating PDF.")
+    else:
+        title = ""
+        with open(src, 'r') as src, open(texfile, 'w+') as texf:
+            keys = json_keys(json.load(src, object_pairs_hook=OrderedDict))
+
+            for i, key in enumerate(keys):
+                content = ""
+                if i + 1 >= len(keys) or not sublist(key, keys[i+1]):
+                    fname = topic_filename(key[:-1])
+                    print("Reading %s" % fname)
+                    if not os.path.isfile(fname):
+                        print("Source HTML %s doesn't exist, skipping" % fname)
+                    else:
+                        content += subtract_header(open(fname, 'r').read(), len(key)-3)
+                elif len(key) > 1:
+                    content += "<h{}>".format(len(key)-1) + key[-1] + "</h{}>".format(len(key)-1)
+                elif len(key) > 0:
+                    title = key[-1]
+
+                tex_content = pandoc_base(
+                    content.encode('utf-8'), from_file=False, template=None, verbose=verbose,
+                    media_dir=os.path.join(os.path.dirname(texfile), "MEDIA")
+                ).decode()
+
+                # Filter removes all .shtml graphics since these don't work
+                tex_content = re.sub(r"\\includegraphics(?:\[.*\])?{.*.shtml}", r"\mbox{Image unavailable}", tex_content)
+
+                texf.write(tex_content)
+        print("Applying template")
+        pandoc_base(texfile, texfile, title=title, verbose=verbose)  # Apply template
+
+    print("Producing PDF")
+    pandoc_base(texfile, dst, template=None, verbose=verbose)
+
+def generate_pdf(src, dst, force=False, verbose=False):
 
     # If source doesn't exist or destination already does
     if not os.path.isfile(src):
@@ -34,39 +162,9 @@ def generate_pdf(src, dst, force=False):
     title = os.path.basename(src)
     title = title[0:title.rfind(".")]
 
-    command = [
-        "/usr/bin/pandoc",
-        "--quiet",
-
-        "--pdf-engine", "xelatex",
-
-        "--toc",
-
-        "--template=template.tex",
-        "-V", "geometry:margin=1.5in",
-        "-V", "documentclass=report",
-        # "-V" "geometry:papersize=a3paper",
-
-        "-V", "urlcolor=blue",
-        "-V", "linkcolor=blue",
-
-        # "-V", "title="+title,
-
-        src,
-        "-o", dst,
-    ]
-
     # Run in verbose mode when converting from a .tex to .pdf
     # because one would only do this when shit has gone wrong
-    if src.endswith(".tex"):
-        command[1] = "--verbose"
-        print(" ".join(command))
-    else:
-        print(command[-1])
-
-    # Do it!
-    call(command)
-
+    pandoc_base(src, dst, verbose=verbose or src.endswith(".tex"))
 
 if __name__ == '__main__':
 
@@ -79,8 +177,18 @@ if __name__ == '__main__':
     else:
         dst = src.replace(".html", ".pdf").replace(".tex", ".pdf")
 
-    generate_pdf(
-        src=args['<src>'],
-        dst=os.path.join(ROOT_PDF, dst),
-        force=args["--force"],
-    )
+    if src.endswith(".json"):
+        generate_multifile_pdf(
+            src=args['<src>'],
+            texfile=os.path.join(ROOT_TEX, src.replace(".json", ".tex")),
+            dst=os.path.join(ROOT_PDF, src.replace(".json", ".pdf")),
+            force=args["--force"],
+            verbose=args["--verbose"]
+        )
+    else:
+        generate_pdf(
+            src=args['<src>'],
+            dst=os.path.join(ROOT_PDF, dst),
+            force=args["--force"],
+            verbose=args["--verbose"]
+        )
