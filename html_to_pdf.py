@@ -20,20 +20,26 @@ import json
 from collections import OrderedDict
 import os.path
 import re
+import sys
 
 from download_html import mkdir, ROOT as ROOT_TOPICS
 from download_total import subtract_header, HEADS
 
 ROOT_PDF = "PDF"
 ROOT_TEX = "TEX"
+ROOT_MEDIA = os.path.join(ROOT_TEX, "MEDIA")
+SUB_TEX = os.path.join(ROOT_TEX, "SUB")
 
 pandoc_options = [
-    "/usr/bin/pandoc",
+    "/usr/local/bin/pandoc",  # "/usr/bin/pandoc",
     "--quiet",
 
     "--pdf-engine", "xelatex",
+    # "+RTS", "-K10", "-RTS",
 
     "--toc",
+    "-V", "tables",
+    "-V", "graphics",
 
     "-V", "geometry:margin=1.5in",
     "-V", "documentclass=article",
@@ -41,18 +47,18 @@ pandoc_options = [
 
     "-V", "urlcolor=blue",
     "-V", "linkcolor=blue",
-
-    # "-V", "title="+title,
 ]
 
 def pandoc_base(src, dst=None, template="template.tex", from_file=True,
         from_type="html", to_type="latex", verbose=False, print_cmd=False,
-        title="", media_dir="", other_args=[]):
+        standalone=False, title="", media_dir="", other_args=[]):
     command = pandoc_options.copy()
     if verbose:
         command[command.index("--quiet")] = "--verbose"
     if template:
         command.append("--template=%s" % template)
+    if standalone:
+        command.append("-s")
 
     if title:
         command += ["-V", "title=%s" % title]
@@ -67,7 +73,7 @@ def pandoc_base(src, dst=None, template="template.tex", from_file=True,
         input_content = None
         command += [src]
     else:
-        input_content = src
+        input_content = src.encode('utf-8')
         command += ["-f", from_type]
 
     # If dst is empty then return the content as a string
@@ -80,9 +86,10 @@ def pandoc_base(src, dst=None, template="template.tex", from_file=True,
 
     if print_cmd:
         print(" ".join(command))
-    ret = subprocess.run(command, input=input_content, stdout=stdout)
+    ret = subprocess.run(command, input=input_content, stdout=stdout, stderr=subprocess.PIPE)
+    sys.stderr.write(ret.stderr.decode())
     if not dst:
-        return ret.stdout
+        return ret.stdout.decode()
 
 def topic_filename(json_keys, root=ROOT_TOPICS):
     return os.path.join(root, "/".join(json_keys[1:]))
@@ -115,35 +122,48 @@ def generate_multifile_pdf(src, texfile, dst, force=False, verbose=False):
     if not force and os.path.isfile(texfile):
         print("Temporary TeX file already exists, generating PDF.")
     else:
-        title = ""
         with open(src, 'r') as src, open(texfile, 'w+') as texf:
             keys = json_keys(json.load(src, object_pairs_hook=OrderedDict))
+            title = keys[0][0] if len(keys) else ""  # The top level element if there is anything
+
+            template_placeholder = "(BODY)"
+            template = pandoc_base(template_placeholder, from_file=False,
+                standalone=True, title=title).split(template_placeholder)
+
+            texf.write(template[0])  # Write first half of template
 
             for i, key in enumerate(keys):
-                content = ""
                 if i + 1 >= len(keys) or not sublist(key, keys[i+1]):
                     fname = topic_filename(key[:-1])
                     print("Reading %s" % fname)
+                    tex_basename = os.path.basename(topic_filename(key[:-1], ROOT_TEX).replace(".html", ".tex"))
+                    tex_fname = os.path.join(SUB_TEX, str(len(key)-2) + "--" + tex_basename)
                     if not os.path.isfile(fname):
                         print("Source HTML %s doesn't exist, skipping" % fname)
                     else:
-                        content += subtract_header(open(fname, 'r').read(), len(key)-3)
+                        include_statement = "\n\\include{%s}\n" % os.path.relpath(tex_fname)
+                        texf.write(include_statement)
+                        if not force and os.path.exists(tex_fname):
+                            print("Output TeX %s exists, skipping" % tex_fname)
+                        else:
+                            content = subtract_header(open(fname, 'r').read(), len(key)-3)
+                            mkdir(SUB_TEX)
+                            tex_content = pandoc_base(
+                                content, from_file=False, template=None,
+                                verbose=verbose, media_dir=ROOT_MEDIA
+                            )
+                            # Filter removes all .shtml graphics since these don't work
+                            tex_content = re.sub(r"\\includegraphics(?:\[.*\])?{.*.shtml}", r"\mbox{Image unavailable}", tex_content)
+                            with open(tex_fname, 'w+') as texf_small:
+                                texf_small.write(tex_content)
                 elif len(key) > 1:
-                    content += "<h{}>".format(len(key)-1) + key[-1] + "</h{}>".format(len(key)-1)
+                    content = "<h{}>".format(len(key)-1) + key[-1] + "</h{}>".format(len(key)-1)
+                    texf.write("\n" + pandoc_base(content, from_file=False, template=None, verbose=verbose) + "\n")
                 elif len(key) > 0:
                     title = key[-1]
 
-                tex_content = pandoc_base(
-                    content.encode('utf-8'), from_file=False, template=None, verbose=verbose,
-                    media_dir=os.path.join(os.path.dirname(texfile), "MEDIA")
-                ).decode()
-
-                # Filter removes all .shtml graphics since these don't work
-                tex_content = re.sub(r"\\includegraphics(?:\[.*\])?{.*.shtml}", r"\mbox{Image unavailable}", tex_content)
-
-                texf.write(tex_content)
-        print("Applying template")
-        pandoc_base(texfile, texfile, title=title, verbose=verbose)  # Apply template
+                # texf.write(tex_content)
+            texf.write(template[1])  # Write second half of template
 
     print("Producing PDF")
     pandoc_base(texfile, dst, template=None, verbose=verbose)
