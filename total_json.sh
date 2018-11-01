@@ -1,14 +1,17 @@
 #! /bin/sh
 
 dir=JSON/
-outdir=TOTAL_JSON/
 ext=.json
 if [ "$#" -ne 1 ]; then
-  echo "Usage: $(basename $0) <title>"
+  echo "Usage: $(basename $0) <json> [-f]"
   exit 1
 fi
-bigtitle="$1"
-outfile=$outdir/$bigtitle$ext
+outfile="$1"
+
+if [ "$2" != "-f" ] && [ -f "$outfile" ]; then
+  echo "Output JSON file already exists, skipping"
+  exit 1
+fi
 
 oldcwd=$(pwd)
 cd "$(dirname "$0")"
