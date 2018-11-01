@@ -32,7 +32,7 @@ ROOT_MEDIA = os.path.join(ROOT_TEX, "MEDIA")
 SUB_TEX = os.path.join(ROOT_TEX, "SUB")
 
 pandoc_options = [
-    "/usr/bin/pandoc",
+    "/usr/local/bin/pandoc",
     "--quiet",
 
     "--pdf-engine", "xelatex",
@@ -41,9 +41,10 @@ pandoc_options = [
     "-V", "tables",
     "-V", "graphics",
 
-    "-V", "geometry:margin=1.5in",
+    "-V", "geometry:margin=0.5in",
     "-V", "documentclass=article",
     # "-V" "geometry:papersize=a3paper",
+    "-V", "fontsize=10pt",
 
     "-V", "urlcolor=blue",
     "-V", "linkcolor=blue",
