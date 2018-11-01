@@ -19,8 +19,6 @@ import download_html
 
 ROOT_JSON = "TOTAL_JSON"
 ROOT_FINAL_HTML = download_html.ROOT_HTML  # original HTML root
-download_html.ROOT = os.path.join(ROOT_JSON, download_html.ROOT)
-download_html.ROOT_HTML = os.path.join(ROOT_JSON, download_html.ROOT_HTML)
 
 def folder_html(folder):
     return folder.split('/')[-1] + ".html"
@@ -50,6 +48,7 @@ def _download_all(urls, folder, force=False, document="", level=1):
             else:
                 header = ""
                 newlevel = level
+            newfolder = os.path.join(folder, key)
             document += header + _download_all(urlgroup, os.path.join(folder, key), force, document, newlevel)
 
         return document
@@ -78,7 +77,7 @@ def main():
 
     doc = download_all(
         urls=input_json,
-        folder=os.path.join(download_html.ROOT, topic),
+        folder=download_html.ROOT,
         force=args["--force"]
     )
 
