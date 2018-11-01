@@ -125,18 +125,21 @@ def generate_multifile_pdf(src, texfile, dst, force=False, verbose=False):
         print("Destination already exists.")
         return
 
+    title = os.path.splitext(os.path.basename(src))[0]
     if not force and os.path.isfile(texfile):
         print("Temporary TeX file already exists, generating PDF.")
     else:
         with open(src, 'r') as src, open(texfile, 'w+') as texf:
-            keys = json_keys(json.load(src, object_pairs_hook=OrderedDict))
-            title = keys[0][0] if len(keys) else ""  # The top level element if there is anything
+            jdict = json.load(src, object_pairs_hook=OrderedDict)
+            keys = json_keys(jdict)
+            jkeys = list(jdict.keys())
+            title = jkeys[0] if len(jkeys) == 1 else title  # The top level element if there is anything
 
-            template_placeholder = "(BODY)"
-            template = pandoc_base(template_placeholder, from_file=False,
-                standalone=True, title=title).split(template_placeholder)
+            # template_placeholder = "(BODY)"
+            # template = pandoc_base(template_placeholder, from_file=False,
+            #     ).split(template_placeholder)
 
-            texf.write(template[0])  # Write first half of template
+            # texf.write(template[0])  # Write first half of template
 
             for i, key in enumerate(keys):
                 if i + 1 >= len(keys) or not sublist(key, keys[i+1]):
@@ -167,11 +170,10 @@ def generate_multifile_pdf(src, texfile, dst, force=False, verbose=False):
                     texf.write("\n" + pandoc_base(content, from_file=False, template=None, verbose=verbose) + "\n")
                 elif len(key) > 0:
                     title = key[-1]
-                # texf.write(tex_content)
-            texf.write(template[1])  # Write second half of template
+            # texf.write(template[1])  # Write second half of template
 
     print("Producing PDF")
-    pandoc_base(texfile, dst, template=None, verbose=verbose)
+    pandoc_base(texfile, dst, verbose=verbose, standalone=True, title=title)
 
 def generate_pdf(src, dst, force=False, verbose=False):
 

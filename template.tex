@@ -186,6 +186,10 @@ $if(strikeout)$
   \pdfstringdefDisableCommands{\renewcommand{\sout}{}}
 $endif$
 
+$if(toc)$
+  \usepackage{etoc}
+$endif$
+
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{6pt plus 2pt minus 1pt}
 \setlength{\emergencystretch}{3em}  % prevent overfull lines
@@ -248,10 +252,17 @@ $if(toc)$
     \hypersetup{linkcolor=$if(toccolor)$$toccolor$$else$black$endif$}
     \setcounter{tocdepth}{$toc-depth$}
 
+    {
+      \renewcommand{\contentsname}{Contents Overview}
+      \etocsetnexttocdepth{section}
+      \addcontentsline{toc}{section}{\contentsname}
+      \tableofcontents
+    }
+    \cleardoublepage
     % Add an entry for Contents themselves.
-    \addtocontents{toc}{\protect{\pdfbookmark[0]{\contentsname}{toc}}}
+    \addcontentsline{toc}{section}{\contentsname}
 
-    % \tableofcontents  % For some reason the toc prints twice
+    \tableofcontents  % For some reason the toc prints twice
 }
 $endif$
 
