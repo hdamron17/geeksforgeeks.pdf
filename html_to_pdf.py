@@ -21,6 +21,7 @@ from collections import OrderedDict
 import os.path
 import re
 import sys
+import string
 
 from download_html import mkdir, ROOT as ROOT_TOPICS
 from download_total import subtract_header, HEADS
@@ -31,11 +32,10 @@ ROOT_MEDIA = os.path.join(ROOT_TEX, "MEDIA")
 SUB_TEX = os.path.join(ROOT_TEX, "SUB")
 
 pandoc_options = [
-    "/usr/local/bin/pandoc",  # "/usr/bin/pandoc",
+    "/usr/bin/pandoc",
     "--quiet",
 
     "--pdf-engine", "xelatex",
-    # "+RTS", "-K10", "-RTS",
 
     "--toc",
     "-V", "tables",
@@ -86,8 +86,8 @@ def pandoc_base(src, dst=None, template="template.tex", from_file=True,
 
     if print_cmd:
         print(" ".join(command))
-    ret = subprocess.run(command, input=input_content, stdout=stdout, stderr=subprocess.PIPE)
-    sys.stderr.write(ret.stderr.decode())
+    ret = subprocess.run(command, input=input_content, stdout=stdout, stderr=sys.stderr)
+    # sys.stderr.write(ret.stderr.decode())
     if not dst:
         return ret.stdout.decode()
 
@@ -114,6 +114,11 @@ def _json_keys(json_dict, path=[]):
 def sublist(path1, path2):
     return len(path1) < len(path2) and all(p1 == p2 for p1, p2 in zip(path1, path2))
 
+def sanitize(fname):
+    valid_chars = "-_.()%s%s" % (string.ascii_letters, string.digits)
+    fname = fname.replace(" ", "_")
+    return ''.join(c for c in fname if c in valid_chars)
+
 def generate_multifile_pdf(src, texfile, dst, force=False, verbose=False):
     if not force and os.path.isfile(dst):
         print("Destination already exists.")
@@ -136,13 +141,13 @@ def generate_multifile_pdf(src, texfile, dst, force=False, verbose=False):
                 if i + 1 >= len(keys) or not sublist(key, keys[i+1]):
                     fname = topic_filename(key[:-1])
                     print("Reading %s" % fname)
-                    tex_basename = os.path.basename(topic_filename(key[:-1], ROOT_TEX).replace(".html", ".tex"))
+                    tex_basename = sanitize(os.path.basename(topic_filename(key[:-1], ROOT_TEX).replace(".html", ".tex")))
                     tex_fname = os.path.join(SUB_TEX, str(len(key)-2) + "--" + tex_basename)
                     if not os.path.isfile(fname):
                         print("Source HTML %s doesn't exist, skipping" % fname)
                     else:
-                        include_statement = "\n\\include{%s}\n" % os.path.relpath(tex_fname)
-                        texf.write(include_statement)
+                        input_statement = "\n\\input{%s}\n" % os.path.relpath(tex_fname)
+                        texf.write(input_statement)
                         if not force and os.path.exists(tex_fname):
                             print("Output TeX %s exists, skipping" % tex_fname)
                         else:
@@ -161,7 +166,6 @@ def generate_multifile_pdf(src, texfile, dst, force=False, verbose=False):
                     texf.write("\n" + pandoc_base(content, from_file=False, template=None, verbose=verbose) + "\n")
                 elif len(key) > 0:
                     title = key[-1]
-
                 # texf.write(tex_content)
             texf.write(template[1])  # Write second half of template
 
