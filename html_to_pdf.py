@@ -40,14 +40,16 @@ pandoc_options = [
     "--toc",
     "-V", "tables",
     "-V", "graphics",
+    "--listings",
+    "--number-sections",
 
     "-V", "geometry:margin=0.5in",
     "-V", "documentclass=article",
     # "-V" "geometry:papersize=a3paper",
     "-V", "fontsize=10pt",
 
-    "-V", "urlcolor=blue",
-    "-V", "linkcolor=blue",
+    "-V", "urlcolor=black",
+    "-V", "linkcolor=black",
 ]
 
 def pandoc_base(src, dst=None, template="template.tex", from_file=True,
@@ -135,23 +137,29 @@ def generate_multifile_pdf(src, texfile, dst, force=False, verbose=False):
             jkeys = list(jdict.keys())
             title = jkeys[0] if len(jkeys) == 1 else title  # The top level element if there is anything
 
-            # template_placeholder = "(BODY)"
-            # template = pandoc_base(template_placeholder, from_file=False,
-            #     ).split(template_placeholder)
+            fnames = set()
 
-            # texf.write(template[0])  # Write first half of template
+            bad_graphics_pattern = re.compile(r"\\includegraphics(?:\[.*\])?{.*.shtml}")
+
+            label_pattern = re.compile(r"\\label\{(.*?)\}")
+
+            rem_langs = [r'C\#', r'PHP', r'Java']
+            lang_pattern = r'\\textbf\{(?:%s)\}\s+\\begin\{verbatim\}.*?\\end\{verbatim\}' % "|".join(rem_langs)
+            lang_pattern = re.compile(lang_pattern, re.MULTILINE | re.DOTALL)
+
+            tex_sections = ["part", "section", "subsection", "subsubsection", "paragraph"]
 
             for i, key in enumerate(keys):
+                if not key:
+                    continue
+                fname = topic_filename(key[:-1])
                 if i + 1 >= len(keys) or not sublist(key, keys[i+1]):
-                    fname = topic_filename(key[:-1])
                     print("Reading %s" % fname)
                     tex_basename = sanitize(os.path.basename(topic_filename(key[:-1], ROOT_TEX).replace(".html", ".tex")))
                     tex_fname = os.path.join(SUB_TEX, str(len(key)-2) + "--" + tex_basename)
                     if not os.path.isfile(fname):
                         print("Source HTML %s doesn't exist, skipping" % fname)
                     else:
-                        input_statement = "\n\\input{%s}\n" % os.path.relpath(tex_fname)
-                        texf.write(input_statement)
                         if not force and os.path.exists(tex_fname):
                             print("Output TeX %s exists, skipping" % tex_fname)
                         else:
@@ -162,15 +170,26 @@ def generate_multifile_pdf(src, texfile, dst, force=False, verbose=False):
                                 verbose=verbose, media_dir=ROOT_MEDIA
                             )
                             # Filter removes all .shtml graphics since these don't work
-                            tex_content = re.sub(r"\\includegraphics(?:\[.*\])?{.*.shtml}", r"\mbox{Image unavailable}", tex_content)
+                            tex_content = re.sub(bad_graphics_pattern, r"\mbox{Image unavailable}", tex_content)
+                            tex_content = re.sub(lang_pattern, "", tex_content)
                             with open(tex_fname, 'w+') as texf_small:
                                 texf_small.write(tex_content)
+                        # input_statement = "\n\\include{%s}\n" % os.path.relpath(tex_fname)
+                        input_statement = ""
+                        if tex_fname in fnames and os.path.exists(tex_fname):
+                            with open(tex_fname, 'r') as ref_file:
+                                match = label_pattern.search(ref_file.read())
+                                if match:
+                                    input_statement = "\\%s{%s}\n\nSee section \\ref{%s}.\n" % \
+                                            (tex_sections[len(key)-2], key[-1], match.group(1))
+                        else:
+                            fnames.add(tex_fname)
+                        texf.write(input_statement if input_statement else open(tex_fname, 'r').read())
                 elif len(key) > 1:
                     content = "<h{}>".format(len(key)-1) + key[-1] + "</h{}>".format(len(key)-1)
                     texf.write("\n" + pandoc_base(content, from_file=False, template=None, verbose=verbose) + "\n")
                 elif len(key) > 0:
                     title = key[-1]
-            # texf.write(template[1])  # Write second half of template
 
     print("Producing PDF")
     pandoc_base(texfile, dst, verbose=verbose, standalone=True, title=title)

@@ -114,7 +114,7 @@ $endif$
 \lfoot{}
 % \lfoot{v $version$}
 \cfoot{}
-\rfoot{\thepage}
+\rfoot{\raisebox{6em}{\thepage}}
 $if(lang)$
   \ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
     \usepackage[shorthands=off,$for(babel-otherlangs)$$babel-otherlangs$$sep$,$endfor$,main=$babel-lang$]{babel}
@@ -142,6 +142,11 @@ $endif$
 
 $if(listings)$
   \usepackage{listings}
+  \lstset{
+    basicstyle=\tiny\setstretch{0.3},
+    % breaklines=true,
+    multicols=2
+  }
 $endif$
 
 $if(lhs)$
@@ -230,6 +235,35 @@ $endfor$
 \renewcommand{\subparagraph}[1]{\oldsubparagraph{#1}\mbox{}}
 \fi
 
+\usepackage{pgf}
+\usepackage{pgfpages}
+\pgfpagesuselayout{4 on 1}[letterpaper,border shrink=0mm]
+
+\usepackage{setspace}
+
+% \let\oldverbatim\verbatim
+% \let\endoldverbatim\endverbatim
+% \renewenvironment{verbatim}{\begingroup\small\setstretch{0.3}\begin{multicols}{2}\oldverbatim}{\endoldverbatim\end{multicols}\endgroup}
+\setlength{\columnseprule}{0.2pt}
+
+\let\olditemize\itemize
+\let\endolditemize\enditemize
+\renewenvironment{itemize}{\olditemize \setlength{\topskip}{-2pt}}{\endolditemize}
+
+\let\oldenumerate\enumerate
+\let\endoldenumerate\endenumerate
+\renewenvironment{enumerate}{\oldenumerate \setlength{\itemsep}{-2pt}\setlength{\topsep}{-2pt}}{\endoldenumerate}
+
+\let\oldincludegraphics\includegraphics
+\renewcommand{\includegraphics}[2][]{\scalebox{0.5}{\oldincludegraphics[#1]{#2}}}
+
+\usepackage{times}
+
+\setstretch{0.5}
+\setlength{\topskip}{-2pt}
+
+\geometry{margin=3pt, bottom=25pt, top=2em}
+
 \begin{document}
 
 $if(title)$
@@ -263,6 +297,7 @@ $if(toc)$
     \addcontentsline{toc}{section}{\contentsname}
 
     \tableofcontents  % For some reason the toc prints twice
+    \cleardoublepage
 }
 $endif$
 
