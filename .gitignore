@@ -3,6 +3,7 @@ Topics/
 HTML/
 PDF/
 TEX/
+venv/
 
 # These are uploaded on Releases page
 *.pdf
